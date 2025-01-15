@@ -169,8 +169,7 @@ The current version of the 7-Day Staff Roster Generator is functional but can be
 - Use weighted coefficients in the objective function to allow trade-offs.
 
 ### 9. User Interface
-- Create a simple web-based or desktop UI for users to upload input files, set constraints, and view results interactively.
-- Use frameworks like Flask or Streamlit for implementation.
+- Use React with TypeScript for building a web interface where users can upload the staff.csv and jobs.csv files, set constraints, and view the generated roster.
 
 ### 10. Machine Learning Integration
 - Use machine learning models to predict staff availability and job durations based on historical data, further optimizing assignments.
