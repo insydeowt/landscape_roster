@@ -1,0 +1,11 @@
+StaffID,StaffName,Location,Tools
+S001,Staff Member 1,West,"Lawnmower, Pruning Saw, Shovel"
+S002,Staff Member 2,East,"Pruning Saw, Shovel"
+S003,Staff Member 3,West,"Wheelbarrow, Lawnmower, Shovel"
+S004,Staff Member 4,South,"Pruning Saw, Hedge Shears"
+S005,Staff Member 5,West,"Pruning Saw, Shovel, Hedge Shears, Lawnmower"
+S006,Staff Member 6,East,"Lawnmower, Shovel, Hedge Shears, Trimmer, Pruning Saw"
+S007,Staff Member 7,South,"Pruning Saw, Trimmer, Wheelbarrow"
+S008,Staff Member 8,South,"Lawnmower, Wheelbarrow, Rake, Shovel"
+S009,Staff Member 9,East,"Rake, Hedge Shears"
+S010,Staff Member 10,South,"Hedge Shears, Wheelbarrow, Rake"
