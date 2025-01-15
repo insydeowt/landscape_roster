@@ -21,6 +21,7 @@ def create_roster(staff_csv, jobs_csv, output_file):
 
     # Constants
     DAYS = list(range(7))  # 0 to 6 for a 7-day week
+    DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     MAX_HOURS_PER_DAY = 9  # Including travel time
     MAX_DAYS_PER_WEEK = 5
 
@@ -95,7 +96,7 @@ def create_roster(staff_csv, jobs_csv, output_file):
                             "JobLength": job_length,
                             "JobLocation": job_location,
                             "StaffAssigned": staff_id,
-                            "Day": day
+                            "Day": DAY_NAMES[day]  # Use day names instead of numbers
                         })
         roster_df = pd.DataFrame(roster)
         roster_df.to_csv(output_file, index=False)
