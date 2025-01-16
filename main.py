@@ -14,7 +14,7 @@ def calculate_travel_time(from_loc, to_loc):
         return 0.5
 
 # Create and solve the optimization model
-def create_roster(staff_csv, jobs_csv, output_file):
+def create_roster(staff_csv, jobs_csv, roster_file, uncompleted_jobs_file):
     # Load data
     staff_df = pd.read_csv(staff_csv)
     jobs_df = pd.read_csv(jobs_csv)
@@ -28,9 +28,9 @@ def create_roster(staff_csv, jobs_csv, output_file):
     # Initialize the problem
     problem = LpProblem("Staff_Rostering", LpMaximize)
 
-    # Create decision variables for job assignments
-    assignments = {
-        (staff_id, job_id, day): LpVariable(f"assign_{staff_id}_{job_id}_{day}", 0, 1, cat="Binary")
+    # Create decision variables for job assignments (hours worked on a job per staff per day)
+    hours_worked = {
+        (staff_id, job_id, day): LpVariable(f"hours_{staff_id}_{job_id}_{day}", 0, MAX_HOURS_PER_DAY, cat="Continuous")
         for staff_id in staff_df['StaffID']
         for job_id in jobs_df['JobID']
         for day in DAYS
@@ -43,11 +43,21 @@ def create_roster(staff_csv, jobs_csv, output_file):
         for day in DAYS
     }
 
-    # Objective: Maximize total job assignments
-    problem += lpSum(assignments[(staff_id, job_id, day)] for staff_id in staff_df['StaffID']
+    # Objective: Maximize total hours worked
+    problem += lpSum(hours_worked[(staff_id, job_id, day)] for staff_id in staff_df['StaffID']
                      for job_id in jobs_df['JobID'] for day in DAYS)
 
     # Constraints
+
+    # Job completion constraint: Ensure total assigned hours match the job's required hours
+    for _, job in jobs_df.iterrows():
+        job_id = job['JobID']
+        job_length = job['JobLength']
+        problem += lpSum(
+            hours_worked[(staff_id, job_id, day)]
+            for staff_id in staff_df['StaffID']
+            for day in DAYS
+        ) == job_length, f"Job_{job_id}_Completion"
 
     # Staff must have the tools required for the job
     for _, job in jobs_df.iterrows():
@@ -56,22 +66,26 @@ def create_roster(staff_csv, jobs_csv, output_file):
             staff_tools = set(staff['Tools'].split(", "))
             if not required_tools.issubset(staff_tools):
                 for day in DAYS:
-                    problem += lpSum(assignments[(staff['StaffID'], job['JobID'], day)] for day in DAYS) == 0
+                    problem += lpSum(hours_worked[(staff['StaffID'], job['JobID'], day)] for day in DAYS) == 0
 
-    # Link job assignments to working days
+    # Link hours worked to working days
     for staff_id in staff_df['StaffID']:
         for day in DAYS:
-            problem += lpSum(assignments[(staff_id, job_id, day)] for job_id in jobs_df['JobID']) <= working_days[(staff_id, day)] * len(jobs_df)
+            problem += lpSum(hours_worked[(staff_id, job_id, day)] for job_id in jobs_df['JobID']) <= MAX_HOURS_PER_DAY * working_days[(staff_id, day)]
 
     # Limit staff to 9 hours per day including travel time
     for staff_id in staff_df['StaffID']:
         for day in DAYS:
-            problem += lpSum(
-                assignments[(staff_id, job_id, day)] *
-                (jobs_df[jobs_df['JobID'] == job_id]['JobLength'].values[0] +
-                 calculate_travel_time(staff_df[staff_df['StaffID'] == staff_id]['Location'].values[0],
-                                       jobs_df[jobs_df['JobID'] == job_id]['Location'].values[0]))
-                for job_id in jobs_df['JobID']
+            staff_location = staff_df[staff_df['StaffID'] == staff_id]['Location'].values[0]
+            problem += (
+                lpSum(hours_worked[(staff_id, job_id, day)] for job_id in jobs_df['JobID']) +
+                lpSum(
+                    calculate_travel_time(
+                        staff_location,
+                        jobs_df[jobs_df['JobID'] == job_id]['Location'].values[0]
+                    )
+                    for job_id in jobs_df['JobID']
+                )
             ) <= MAX_HOURS_PER_DAY
 
     # Limit staff to 5 working days per week
@@ -81,36 +95,53 @@ def create_roster(staff_csv, jobs_csv, output_file):
     # Solve the problem
     status = problem.solve()
 
-    # Output the roster
-    if LpStatus[status] == "Optimal":
-        print("Solution found. Generating output roster...")
-        roster = []
-        for staff_id in staff_df['StaffID']:
-            for job_id in jobs_df['JobID']:
+    # Separate completed and uncompleted jobs
+    roster = []
+    uncompleted_jobs = []
+
+    for job_id in jobs_df['JobID']:
+        total_hours_assigned = sum(
+            hours_worked[(staff_id, job_id, day)].varValue or 0
+            for staff_id in staff_df['StaffID']
+            for day in DAYS
+        )
+        required_hours = jobs_df[jobs_df['JobID'] == job_id]['JobLength'].values[0]
+        
+        if total_hours_assigned == required_hours:
+            for staff_id in staff_df['StaffID']:
                 for day in DAYS:
-                    if assignments[(staff_id, job_id, day)].varValue == 1:
-                        job_length = jobs_df[jobs_df['JobID'] == job_id]['JobLength'].values[0]
+                    hours = hours_worked[(staff_id, job_id, day)].varValue
+                    if hours and hours > 0:
                         job_location = jobs_df[jobs_df['JobID'] == job_id]['Location'].values[0]
                         roster.append({
                             "JobID": job_id,
-                            "JobLength": job_length,
                             "JobLocation": job_location,
                             "StaffAssigned": staff_id,
-                            "Day": DAY_NAMES[day]  # Use day names instead of numbers
+                            "Day": DAY_NAMES[day],
+                            "HoursWorked": hours
                         })
-        roster_df = pd.DataFrame(roster)
-        roster_df.to_csv(output_file, index=False)
-        print(f"Roster saved to {output_file}.")
-    else:
-        print(f"Solution could not be found. Status: {LpStatus[status]}")
+        else:
+            uncompleted_jobs.append({
+                "JobID": job_id,
+                "Reason": f"Only {total_hours_assigned} hours assigned out of {required_hours}."
+            })
+
+    # Save completed jobs (roster) to CSV
+    roster_df = pd.DataFrame(roster)
+    roster_df.to_csv(roster_file, index=False)
+    print(f"Roster saved to {roster_file}.")
+
+    # Save uncompleted jobs to CSV
+    uncompleted_jobs_df = pd.DataFrame(uncompleted_jobs)
+    uncompleted_jobs_df.to_csv(uncompleted_jobs_file, index=False)
+    print(f"Uncompleted jobs saved to {uncompleted_jobs_file}.")
 
 # Main execution
 if __name__ == "__main__":
-    # File paths (assuming files are in the same folder as this script)
     base_dir = os.path.dirname(os.path.abspath(__file__))
     staff_csv = os.path.join(base_dir, "staff.csv")
     jobs_csv = os.path.join(base_dir, "jobs.csv")
-    output_csv = os.path.join(base_dir, "7_day_roster.csv")
+    roster_file = os.path.join(base_dir, "7_day_roster.csv")
+    uncompleted_jobs_file = os.path.join(base_dir, "uncompleted_jobs.csv")
 
-    # Generate the roster
-    create_roster(staff_csv, jobs_csv, output_csv)
+    create_roster(staff_csv, jobs_csv, roster_file, uncompleted_jobs_file)

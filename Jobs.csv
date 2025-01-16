@@ -7,10 +7,3 @@ J005,North,"Hedge Shears, Lawnmower, Trimmer, Wheelbarrow",5
 J006,North,"Wheelbarrow, Trimmer, Lawnmower, Shovel",5
 J007,East,"Shovel, Rake, Lawnmower, Pruning Saw",8
 J008,West,"Wheelbarrow, Shovel, Pruning Saw",7
-J009,North,"Pruning Saw, Shovel, Rake",3
-J010,North,"Wheelbarrow, Shovel, Hedge Shears, Rake",6
-J011,South,Lawnmower,8
-J012,South,"Hedge Shears, Pruning Saw, Wheelbarrow",6
-J013,West,Trimmer,3
-J014,East,"Hedge Shears, Shovel",2
-J015,North,Trimmer,8
